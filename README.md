@@ -1,20 +1,32 @@
-### Demo应用表结构、分片规则
+以简单的B2C商城作为示例，演示几个关键场景，以此：
+- 了解mycat分库分表使用方法；
+- 典型场景使用分库分表后的解决方案；
+
+### Demo应用：表结构、分片规则
+[mycat-dn0.sql](mycat-demo/src/main/resources/mycat-dn0.sql)：`dn0`的建表语句，包含`product`表，以及用于mycat全局序列的mysql function；
+[mycat-dn1-4.sql](mycat-demo/src/main/resources/mycat-dn1-4.sql)：`dn 1-4`的建表语句，根据下图执行相应建表SQL；
+
 ![](logical-table-and-datanode.png)
 
 - `product`: 产品表，不分片，存`dn0`
-- `member`: 会员表，以`member_id`分片，存`dn1`, `dn2` <br />
-  `(member_id % 32) => { 0-15: dn1, 16-31: dn2 }`
-- `member_account`: 会员账号`account`与`member_id`对应关系，主键`account`，以`account`的`hashcode`绝对值`account_hash`分片，存`dn1`, `dn2` <br />
-  会员使用`account` + `password`登录为高频场景，因此添加`member_account`表，相当于由应用维护的一个索引；
-  `(account_hash % 2)`，结果`0, 1`分别对应`dn1`, `dn2`
-- `order_header`, `order_detail`: 订单主表、明细表，都以`order_id`分片，存`dn1`, `dn2`, `dn3`, `dn4`
-  `(member_id % 32) => { 0-7: dn1, 8-15: dn2, 16-23: dn3, 24-31: dn4 }`
-- `member_order`: 会员订单`order_id`与`member_id`对应关系，主键`member_id` + `order_id`，以`member_id`分片，存`dn1`, `dn2`
-  作用同`member_account`表，是应用维护的一个索引，用于会员查询自己的订单；
+- `member`: 会员表 <br />
+  _分片字段_：`member_id` <br />
+  _分片规则_：`(member_id % 32) => { 0-15: dn1, 16-31: dn2 }` <br />
+  _数据节点_：`dn1`, `dn2`
+- `member_account`: 会员账号`account`与`member_id`对应关系，主键`account` <br />
+  会员使用`account` + `password`登录为高频场景，因此添加`member_account`表，相当于由应用自行维护的一个索引；没有使用分片拆分时，在`member`表上为`account`字段建一个唯一索引即可，分片后`member_account`的作用即相当于这个唯一索引。 <br />
+  _分片字段_：`account_hash`，即`account`的`hashcode`绝对值<br />
+  _分片规则_：`(account_hash % 2) => { 0: dn1, 1: dn2 }`<br />
+  _数据节点_：`dn1`, `dn2` 
+- `order_header`, `order_detail`: 订单主表、明细表，都以`order_id`分片，存`dn1`, `dn2`, `dn3`, `dn4` <br />
+  _分片字段_：`order_id`<br />
+  _分片规则_：`(member_id % 32) => { 0-7: dn1, 8-15: dn2, 16-23: dn3, 24-31: dn4 }`<br />
+  _数据节点_：`dn1`, `dn2`, `dn3`, `dn4`
+- `member_order`: 会员订单`order_id`与`member_id`对应关系，主键`member_id` + `order_id`，以`member_id`分片，存`dn1`, `dn2` <br />
+  作用同`member_account`表，分片后应用自行维护的一个索引，用于会员查询自己的订单；<br />
+  分片规则与`member`表完全一样；
 
-### Demo应用场景
-以简单的B2C商城作为示例，演示几个关键场景：
-
+### Demo应用：示例场景
 1. 用户使用手机号注册（手机号作为登录账号）
    ```java
    Member registerByMobile(String mobile, String password, String email, String nickname);
