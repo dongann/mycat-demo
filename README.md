@@ -1,3 +1,41 @@
+### Demo应用表结构、分片规则
+![](logical-table-and-datanode.png)
+
+- `product`: 产品表，不分片，存`dn0`
+- `member`: 会员表，以`member_id`分片，存`dn1`, `dn2` <br />
+  `(member_id % 32) => { 0-15: dn1, 16-31: dn2 }`
+- `member_account`: 会员账号`account`与`member_id`对应关系，主键`account`，以`account`的`hashcode`绝对值`account_hash`分片，存`dn1`, `dn2` <br />
+  会员使用`account` + `password`登录为高频场景，因此添加`member_account`表，相当于由应用维护的一个索引；
+  `(account_hash % 2)`，结果`0, 1`分别对应`dn1`, `dn2`
+- `order_header`, `order_detail`: 订单主表、明细表，都以`order_id`分片，存`dn1`, `dn2`, `dn3`, `dn4`
+  `(member_id % 32) => { 0-7: dn1, 8-15: dn2, 16-23: dn3, 24-31: dn4 }`
+- `member_order`: 会员订单`order_id`与`member_id`对应关系，主键`member_id` + `order_id`，以`member_id`分片，存`dn1`, `dn2`
+  作用同`member_account`表，是应用维护的一个索引，用于会员查询自己的订单；
+
+### Demo应用场景
+以简单的B2C商城作为示例，演示几个关键场景：
+
+1. 用户使用手机号注册（手机号作为登录账号）
+   ```java
+   Member registerByMobile(String mobile, String password, String email, String nickname);
+   ```
+2. 用户登录
+   ```java
+   Member login(String account, String password);
+   ```
+3. 提交订单
+   ```java
+   Order createOrder(Cart cart);
+   ```
+4. 查询会员订单
+   ```java
+   List<Order> findMemberOrders(long memberId, int offset, int count);
+   ```
+5. 查询订单明细
+   ```java
+   List<OrderDetail> getOrderDetails(long orderId);
+   ```
+
 ### MyCat管理
 ```sh
 ./mycat-server/bin/mycat start
@@ -30,21 +68,6 @@ mysql -h localhost -P 9066 -uroot -p --protocol=TCP
 | dn4      | 127.0.0.1 | mysql | 127.0.0.1 | 3306 | W    |      0 |    1 |   10 |      26 |         0 |          0 |
 +----------+-----------+-------+-----------+------+------+--------+------+------+---------+-----------+------------+
 ```
-
-### 表及分片规则
-以简单的B2C电商系统作为演示应用，演示用逻辑表及分片规则方案如下：
-![](logical-table-and-datanode.png)
-
-逻辑表作用说明：
-- `member_account`：会员账号`account`与会员ID `member_id`对应关系，主键为`account`，分片键为`account_hash`。<br />
-   其它表通过`member_id`与会员表关联，整个系统以`member_id`存取会员数据，因此会员表`member`选择`member_id`作为分片键；<br />
-   会员使用`account` + `password`登录为高频场景，因此添加`member_account`表，相当于由应用维护的一个索引。这个也进行水平拆分，使用`account`的hashcode作为分片键；<br />
-   1. 会员注册时提供`account`值，由应用生成`member_id`值，除插入`member`表，同时插入`member_account`表，2个插入操作mycat都可以根据分片字段路由到对应的datanode；
-   2. 会员登录，以及注册时判断账号`account`是否已经注册过，都先通过`member_account`表查询`member_id`值，这个查询可以使用分片键完成路由。随后所有会员数据访问都通过`member_id`存取`member`表，同样使用分片键完成路由；
-- `member_order`：会员ID `member_id`与会员订单`order_id`对应关系，主键为`member_id` + `order_id`，分片键为`member_id`。<br />
-   其作用同`member_account`，是应用维护的一个索引，用于会员查询自己的订单。
-
-<span style="color:red;">演示应用展示的分库分表解决方案应该能覆盖B2C电商系统用户交互的大部分场景，对于后台管理功能需要采用另外的解决方案，例如会员管理、订单管理的列表页面，无法使用分片键执行查询。</span>
 
 ### Tips
 1. 测试了mycat数据库方式的全局序列sequence（`order_detail.detail_id`），简单使用多线程单机验证，功能正常；
