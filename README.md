@@ -3,7 +3,7 @@
 - 典型场景使用分库分表后的解决方案；
 
 ### Demo应用：表结构
-~[](mycat-demo-er.jpg)
+![](mycat-demo-er.jpg)
 
 建立5个mysql数据库：<br />
 [mycat-dn0.sql](mycat-demo/src/main/resources/mycat-dn0.sql)：`dn0`的建表语句，包含`product`表，以及用于mycat全局序列的mysql function；<br />
