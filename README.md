@@ -2,10 +2,14 @@
 - 了解mycat分库分表使用方法；
 - 典型场景使用分库分表后的解决方案；
 
-### Demo应用：表结构、分片规则
-[mycat-dn0.sql](mycat-demo/src/main/resources/mycat-dn0.sql)：`dn0`的建表语句，包含`product`表，以及用于mycat全局序列的mysql function；<br />
-[mycat-dn1-4.sql](mycat-demo/src/main/resources/mycat-dn1-4.sql)：`dn 1-4`的建表语句，根据下图执行相应建表SQL；
+### Demo应用：表结构
+~[](mycat-demo-er.jpg)
 
+建立5个mysql数据库：<br />
+[mycat-dn0.sql](mycat-demo/src/main/resources/mycat-dn0.sql)：`dn0`的建表语句，包含`product`表，以及用于mycat全局序列的mysql function；<br />
+[mycat-dn1-4.sql](mycat-demo/src/main/resources/mycat-dn1-4.sql)：`dn 1-4`的建表语句，根据下图分片情况分别在`dn 1-4`中执行相应建表SQL；
+
+### Demo应用：分片规则
 ![](logical-table-and-datanode.png)
 
 - `product`: 产品表，不分片，存`dn0`
@@ -32,32 +36,32 @@
    Member registerByMobile(String mobile, String password, String email, String nickname);
    ```
    1. 由应用代码生成`member_id`；
-   2. 插入`member`表，`member_id`已经生成，mycat根据`member_id`分片、路由；
-   3. 插入`member_account`表，`account_hash`由手机号生成，mycat根据`account_hash`分片、路由；
+   2. 插入`member`表；`member_id`已经生成，mycat根据`member_id`分片、路由；
+   3. 插入`member_account`表；`account_hash`由`mobile`生成，mycat根据`account_hash`分片、路由；
 2. 用户登录
    ```java
    Member login(String account, String password);
    ```
-   1. 用`account`计算`account_hash`，从`member_account`表查`member_id`，mycat根据`account_hash`路由；
-   2. 用`member_id`查`member`表，校验密码，mycat根据`member_id`路由；
+   1. 用`account`计算`account_hash`，从`member_account`表查`member_id`；mycat根据`account_hash`路由；
+   2. 用`member_id`查`member`表，校验密码；mycat根据`member_id`路由；
 3. 提交订单
    ```java
    Order createOrder(Cart cart);
    ```
    1. 由应用代码生成`order_id`，`order_detail.detail_id`则由mycat的全局序列生成（类似mysql的自增字段）；
-   2. 插入`order_header`、`order_detail`表，mycat根据`order_id`分片、路由，其中`order_detail`使用mycat的ER分片表（父子等关联关系）；
-   3. 插入`member_order`表，mycat根据`member_id`分片、路由；
+   2. 插入`order_header`、`order_detail`表；mycat根据`order_id`分片、路由，其中`order_detail`使用mycat的ER分片表（父子等关联关系）；
+   3. 插入`member_order`表；mycat根据`member_id`分片、路由；
 4. 查询会员订单
    ```java
    List<Order> findMemberOrders(long memberId, int offset, int count);
    ```
-   1. 用`memberId`查`member_order`表，得到订单ID列表，mycat根据`member_id`路由；
-   2. 用订单ID列表查订单，mycat根据`order_id`路由；
+   1. 用`memberId`查`member_order`表，得到订单ID列表；mycat根据`member_id`路由；
+   2. 用订单ID列表查订单；mycat根据`order_id`路由；
 5. 查询订单明细
    ```java
    List<OrderDetail> getOrderDetails(long orderId);
    ```
-   直接用`orderId`查`order_detail`表，mycat根据`order_id`路由；
+   直接用`orderId`查`order_detail`表；mycat根据`order_id`路由；
 
 ### MyCat管理
 ```sh
